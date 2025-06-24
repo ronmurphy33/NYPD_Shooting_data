@@ -1,0 +1,152 @@
+---
+title: "NYPD_data_Rmd"
+author: "Ron M"
+date: "2025-06-01"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r load-data, message=FALSE, warning=FALSE}
+library(readr)
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+
+options(width = 120)
+
+
+url <- "https://data.cityofnewyork.us/api/views/833y-fsy8/rows.csv?accessType=DOWNLOAD"
+nypd_data <- read_csv(url)
+
+
+nypd_data <- nypd_data %>%
+  mutate(
+    OCCUR_DATE = as.Date(OCCUR_DATE, format = "%m/%d/%Y"),
+    Year = year(OCCUR_DATE)
+  ) %>%
+  filter(!is.na(OCCUR_DATE))
+
+```{r summary}
+print(summary(nypd_data), width = 100)
+
+ggplot(nypd_data, aes(x = BORO)) +
+  geom_bar(fill = "steelblue") +
+  labs(
+    title = "Incidents by Borough",
+    x = "Borough",
+    y = "Number of Incidents"
+  ) +
+  theme_minimal()
+
+```{r race by borough}
+
+race_by_boro <- nypd_data %>%
+  filter(!is.na(VIC_RACE), !is.na(BORO)) %>%
+  group_by(BORO, VIC_RACE) %>%
+  summarise(Count = n(), .groups = "drop") %>%
+  arrange(desc(Count))
+
+ggplot(race_by_boro, aes(x = BORO, y = Count, fill = VIC_RACE)) +
+  geom_col(position = "dodge") +
+  labs(
+    title = "Victim Race by Borough",
+    x = "Borough",
+    y = "Number of Incidents",
+    fill = "Victim Race"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "bottom",
+    legend.title = element_text(size = 10),
+    axis.text.x = element_text(angle = 0, hjust = 0.5)
+  )
+
+
+
+```{r normalized-victimization-rate, fig.width=10, fig.height=6}
+# NYC Race population estimates
+race_population <- tibble(
+  VIC_RACE = c("BLACK", "WHITE", "ASIAN / PACIFIC ISLANDER", "HISPANIC", "AMERICAN INDIAN/ALASKAN NATIVE", "UNKNOWN"),
+  Population = c(1900000, 2700000, 1350000, 2400000, 15000, 200000)
+)
+
+
+victim_counts <- nypd_data %>%
+  filter(!is.na(VIC_RACE)) %>%
+  group_by(VIC_RACE) %>%
+  summarise(Count = n(), .groups = "drop")
+
+
+victim_rates <- victim_counts %>%
+  inner_join(race_population, by = "VIC_RACE") %>%
+  mutate(Rate_per_100k = (Count / Population) * 100000)
+
+
+ggplot(victim_rates, aes(x = reorder(VIC_RACE, -Rate_per_100k), y = Rate_per_100k, fill = VIC_RACE)) +
+  geom_col(show.legend = FALSE) +
+  labs(
+    title = "Victimization Rate per 100,000 by Race",
+    x = "Victim Race",
+    y = "Victimization Rate (per 100k people)"
+  ) +
+  theme_minimal()
+
+yearly_counts <- nypd_data %>%
+  group_by(Year) %>%
+  summarise(Incidents = n()) %>%
+  arrange(Year)
+
+
+
+ggplot(yearly_counts, aes(x = Year, y = Incidents)) +
+  geom_line(color = "steelblue", size = 1) +
+  geom_point(color = "steelblue") +
+  scale_x_continuous(breaks = seq(min(yearly_counts$Year), max(yearly_counts$Year), 2)) +
+  labs(
+    title = "NYPD Incidents Over Time",
+    x = "Year",
+    y = "Number of Incidents"
+  ) +
+  theme_minimal()
+
+
+borough_trends <- nypd_data %>%
+  group_by(Year, BORO) %>%
+  summarise(Incidents = n(), .groups = "drop")
+
+# Plot
+ggplot(borough_trends, aes(x = Year, y = Incidents, color = BORO)) +
+  geom_line(size = 1) +
+  geom_point() +
+  scale_x_continuous(breaks = seq(min(borough_trends$Year), max(borough_trends$Year), 2)) +
+  labs(
+    title = "NYPD Incidents Over Time by Borough",
+    x = "Year",
+    y = "Number of Incidents",
+    color = "Borough"
+  ) +
+  theme_minimal()
+
+nypd_data <- nypd_data %>%
+  mutate(Weekday = wday(OCCUR_DATE, label = TRUE))
+
+weekday_summary <- nypd_data %>%
+  group_by(Weekday) %>%
+  summarise(Incidents = n())
+
+ggplot(weekday_summary, aes(x = Weekday, y = Incidents)) +
+  geom_col(fill = "steelblue") +
+  labs(
+    title = "Incidents by Day of Week",
+    x = "Day of Week",
+    y = "Number of Incidents"
+  ) +
+  theme_minimal()
+
+
+#Bias Identification:
+ # Racial biased is the most prevalent bias within this study. The data shows
+#blacks are disproportionately more affected by gun violence in New YorK City than
+# any other race. In order to account for this bias, I included general census
+#data for New York City from 2020. 
