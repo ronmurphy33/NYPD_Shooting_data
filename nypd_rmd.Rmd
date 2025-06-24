@@ -30,8 +30,14 @@ nypd_data <- nypd_data %>%
 ```{r summary}
 print(summary(nypd_data), width = 100)
 
-ggplot(nypd_data, aes(x = BORO)) +
-  geom_bar(fill = "steelblue") +
+boro_counts <- nypd_data %>%
+  filter(!is.na(BORO)) %>%
+  group_by(BORO) %>%
+  summarise(Incidents = n())
+
+ggplot(boro_counts, aes(x = BORO, y = Incidents)) +
+  geom_col(fill = "steelblue") +
+  geom_text(aes(label = Incidents), vjust = -0.25, size =4)
   labs(
     title = "Incidents by Borough",
     x = "Borough",
@@ -45,30 +51,29 @@ race_by_boro <- nypd_data %>%
   filter(!is.na(VIC_RACE), !is.na(BORO)) %>%
   group_by(BORO, VIC_RACE) %>%
   summarise(Count = n(), .groups = "drop") %>%
-  arrange(desc(Count))
+  group_by(BORO) %>%
+  mutate(Percent = Count / sum(Count) * 100)
 
-ggplot(race_by_boro, aes(x = BORO, y = Count, fill = VIC_RACE)) +
+ggplot(race_by_boro, aes(x = BORO, y = Percent, fill = VIC_RACE)) +
   geom_col(position = "dodge") +
+  geom_text(aes(label = paste0(round(Percent, 1), "%")), 
+            position = position_dodge(width = 0.9), 
+            vjust = -0.25, size = 3) +
   labs(
-    title = "Victim Race by Borough",
+    title = "Victim Race by Borough (Percentage)",
     x = "Borough",
-    y = "Number of Incidents",
+    y = "Percentage of Victims",
     fill = "Victim Race"
   ) +
   theme_minimal() +
-  theme(
-    legend.position = "bottom",
-    legend.title = element_text(size = 10),
-    axis.text.x = element_text(angle = 0, hjust = 0.5)
-  )
-
+  theme(legend.position = "bottom")
 
 
 ```{r normalized-victimization-rate, fig.width=10, fig.height=6}
 # NYC Race population estimates
 race_population <- tibble(
   VIC_RACE = c("BLACK", "WHITE", "ASIAN / PACIFIC ISLANDER", "HISPANIC", "AMERICAN INDIAN/ALASKAN NATIVE", "UNKNOWN"),
-  Population = c(1900000, 2700000, 1350000, 2400000, 15000, 200000)
+  Population = c(1943645, 3000945,1385144, 2490350, 86218,1494267)
 )
 
 
@@ -91,6 +96,52 @@ ggplot(victim_rates, aes(x = reorder(VIC_RACE, -Rate_per_100k), y = Rate_per_100
     y = "Victimization Rate (per 100k people)"
   ) +
   theme_minimal()
+
+
+```{r victim-age-by-borough, fig.width=10, fig.height=6}
+age_by_boro <- nypd_data %>%
+  filter(!is.na(VIC_AGE_GROUP), !is.na(BORO)) %>%
+  group_by(BORO, VIC_AGE_GROUP) %>%
+  summarise(Count = n(), .groups = "drop") %>%
+  group_by(BORO) %>%
+  mutate(Percent = Count / sum(Count) * 100)
+
+ggplot(age_by_boro, aes(x = BORO, y = Percent, fill = VIC_AGE_GROUP)) +
+  geom_col(position = "dodge") +
+  geom_text(aes(label = paste0(round(Percent, 1), "%")),
+            position = position_dodge(width = 0.9),
+            vjust = -0.25, size = 3) +
+  labs(
+    title = "Victim Age Group by Borough (Percentage)",
+    x = "Borough",
+    y = "Percentage of Victims",
+    fill = "Age Group"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+```{r victim-sex-by-borough, fig.width=10, fig.height=6}
+sex_by_boro <- nypd_data %>%
+  filter(!is.na(VIC_SEX), !is.na(BORO)) %>%
+  group_by(BORO, VIC_SEX) %>%
+  summarise(Count = n(), .groups = "drop") %>%
+  group_by(BORO) %>%
+  mutate(Percent = Count / sum(Count) * 100)
+
+ggplot(sex_by_boro, aes(x = BORO, y = Percent, fill = VIC_SEX)) +
+  geom_col(position = "dodge") +
+  geom_text(aes(label = paste0(round(Percent, 1), "%")),
+            position = position_dodge(width = 0.9),
+            vjust = -0.25, size = 3) +
+  labs(
+    title = "Victim Sex by Borough (Percentage)",
+    x = "Borough",
+    y = "Percentage of Victims",
+    fill = "Victim Sex"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
 
 yearly_counts <- nypd_data %>%
   group_by(Year) %>%
